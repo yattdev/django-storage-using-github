@@ -5,7 +5,7 @@
 # License: Mozilla Public License Version 2.0
 #
 # Usage:
-# 
+#
 # Add below settings.py:
 # DEFAULT_FILE_STORAGE = "github_storages.backend.BackendStorages"
 # GITHUB_HANDLE = 'Your Github Handle'
@@ -28,245 +28,250 @@ from django.db import models
 
 from github_storages.utils import get_url
 
+
 class BackendStorages(Storage):
-	""" Github Backend storage class for Django pluggable storage system."""
+    """ Github Backend storage class for Django pluggable storage system."""
 
-	def __init__(self):
-		''' Get all the credentials from the settings.py file 
-			and initialize them to global variables. 
-		'''
-		self.github_handle = settings.GITHUB_HANDLE
-		self.token = settings.ACCESS_TOKEN
-		self.repo_name = settings.GITHUB_REPO_NAME
+    def __init__(self):
+        ''' Get all the credentials from the settings.py file 
+                and initialize them to global variables. 
+        '''
+        self.github_handle = settings.GITHUB_HANDLE
+        self.token = settings.ACCESS_TOKEN
+        self.repo_name = settings.GITHUB_REPO_NAME
 
-		try:
-			self.media_bucket = settings.MEDIA_BUCKET_NAME
-		except:
-			self.media_bucket = None
+        try:
+            self.media_bucket = settings.MEDIA_BUCKET_NAME
+        except:
+            self.media_bucket = None
 
-	def url(self, name):
-		return name
+    def url(self, name):
+        return name
 
-	def save(self, name, content, max_length=None):
-		''' Saves the file uploaded from the user side to github '''
+    def save(self, name, content, max_length=None):
+        ''' Saves the file uploaded from the user side to github '''
 
-		path_with_file_name = posixpath.basename(name).split("\\")
-		name = path_with_file_name.pop()
-		path = path_with_file_name
-		
-		return self._save(name, path, content)
+        # Get name and path from full name:
+        path = name.split('/')[:-1]
+        name = name.split('/')[-1]
+        print("Path: ", path)
+        print("Name: ", name)
 
-	def _save(self, name, path, content):
-		'''
-		:Required:
-			name || (name of file) || type string
-			content || (content of the file)
+        return self._save(name, path, content)
 
-		:Action:
-			* Check for the available file name in the github.
-			* If found then calls the upload_file_to_git function
+    def _save(self, name, path, content):
+        '''
+        :Required:
+                name || (name of file) || type string
+                content || (content of the file)
 
-		:Returns:
-			* Download URL of the file
+        :Action:
+                * Check for the available file name in the github.
+                * If found then calls the upload_file_to_git function
 
-		'''
-		while True:
-			if self.exists(name, path):
-				name = self.get_available_name(name)
-			else:
-				break
+        :Returns:
+                * Download URL of the file
 
-		response = self.upload_file_to_git(name, path, content)
+        '''
+        while True:
+            if self.exists(name, path):
+                name = self.get_available_name(name)
+            else:
+                break
 
-		return response["content"]["download_url"]
+        response = self.upload_file_to_git(name, path, content)
 
-	def exists(self, name, path):
-		'''
-		:Required:
-			name || (name of the file) || type string
+        return response["content"]["download_url"]
 
-		:Action:
-			* Gets the fetch url from the get_url method.
-			* Fetchs the response from the git using requests library
+    def exists(self, name, path):
+        '''
+        :Required:
+                name || (name of the file) || type string
 
-		:Returns:
-			* Returns True if File exists on github
-			* Returns False if File does not exits on github
+        :Action:
+                * Gets the fetch url from the get_url method.
+                * Fetchs the response from the git using requests library
 
-		'''
+        :Returns:
+                * Returns True if File exists on github
+                * Returns False if File does not exits on github
 
-		fetch_url = get_url(name, path, self.media_bucket)
-		response = requests.get(fetch_url)
+        '''
 
-		if response.status_code == 200:
-			return True
-		else:
-			return False
+        fetch_url = get_url(name, path, self.media_bucket)
+        response = requests.get(fetch_url)
 
-	def get_available_name(self, name, max_length=None):
-		'''
-		:Required:
-			name || (name of the file) || type string
+        if response.status_code == 200:
+            return True
+        else:
+            return False
 
-		:Action:
-		 	* Appends a random hash value to the file name
+    def get_available_name(self, name, max_length=None):
+        '''
+        :Required:
+                name || (name of the file) || type string
 
-		 :Returns:
-		 	* New file name
-		'''
+        :Action:
+                * Appends a random hash value to the file name
 
-		random_hash = random.random() * 1000
-		name = str(int(random_hash)) + name
-		return name
+         :Returns:
+                * New file name
+        '''
 
-	def upload_file_to_git(self, name, path, content):
-		'''
-		:Required:
-			name || (name of the file) || type string
-			content || Content of the file
-		
-		:Action:
-			* Gets the upload_url from the get_url method
-			* Constructs the payload.
-			* Sends put request to the upload_url with payload and headers.
+        random_hash = random.random() * 1000
+        name = str(int(random_hash)) + name
+        return name
 
-		:Returns
-			* Content of the response obtained from the github.
+    def upload_file_to_git(self, name, path, content):
+        '''
+        :Required:
+                name || (name of the file) || type string
+                content || Content of the file
 
-		:Raise Errors:
-			* If github returns 404 status_code.
+        :Action:
+                * Gets the upload_url from the get_url method
+                * Constructs the payload.
+                * Sends put request to the upload_url with payload and headers.
 
-		'''
+        :Returns
+                * Content of the response obtained from the github.
 
-		upload_url = get_url(name, path, self.media_bucket)
+        :Raise Errors:
+                * If github returns 404 status_code.
 
-		headers ={"Authorization": f"token {self.token}"}
-		
-		payload = {}
-		payload["message"] = name
-		payload["committer"] = {}
-		payload["committer"]["name"] = "Monalisa Octocat"
-		payload["committer"]["email"] = "octocat@github.com"
-		payload["content"] = self.convert_to_base64(content)
+        '''
 
-		response = requests.put(url= upload_url, data=json.dumps(payload), headers=headers)
+        upload_url = get_url(name, path, self.media_bucket)
 
-		if response.status_code == 404:
-			raise IOError(response.content)
+        headers = {"Authorization": f"token {self.token}"}
 
-		json_data = json.loads(response.content)
-		return json_data
+        payload = {}
+        payload["message"] = name
+        payload["committer"] = {}
+        payload["committer"]["name"] = "Monalisa Octocat"
+        payload["committer"]["email"] = "octocat@github.com"
+        payload["content"] = self.convert_to_base64(content)
 
-	def convert_to_base64(self, content):
-		'''
-		:Required:
-			content || Content of the uploaded file
+        response = requests.put(
+            url=upload_url, data=json.dumps(payload), headers=headers)
 
-		:Action:
-			* Converts the content of the file to base64 format.
+        if response.status_code == 404:
+            raise IOError(response.content)
 
-		:Returns:
-			base64 format string.
-		'''
+        json_data = json.loads(response.content)
+        return json_data
 
-		my_string = base64.b64encode(content.read())
-		return my_string
+    def convert_to_base64(self, content):
+        '''
+        :Required:
+                content || Content of the uploaded file
 
-	def delete(self, name):
-		'''
-		:Required:
-			name || (name of the file) || type string
+        :Action:
+                * Converts the content of the file to base64 format.
 
-		:Action: 
-			* Gets the fetch url from the get_url method
-			* Gets the response from the github for the particular content
-			* Extracts the sha from the response
+        :Returns:
+                base64 format string.
+        '''
 
-			* Constructs the payload along with the sha
-			* Gets the delete url from the get_url methods.
-			* Calls delete url with the delete method.
+        my_string = base64.b64encode(content.read())
+        return my_string
 
-		:Returns:
-			True upon proper deletion of the file.
+    def delete(self, name):
+        '''
+        :Required:
+                name || (name of the file) || type string
 
-		:Raise:
-			If the file does not exists || status_code = 404
-		'''
+        :Action: 
+                * Gets the fetch url from the get_url method
+                * Gets the response from the github for the particular content
+                * Extracts the sha from the response
 
-		image_path = self.url(name).split("/master/")[-1]
+                * Constructs the payload along with the sha
+                * Gets the delete url from the get_url methods.
+                * Calls delete url with the delete method.
 
-		path_with_file_name = image_path.split("/")
-		name = path_with_file_name.pop()
+        :Returns:
+                True upon proper deletion of the file.
 
-		if path_with_file_name[0] == self.media_bucket:
-			del path_with_file_name[0]
+        :Raise:
+                If the file does not exists || status_code = 404
+        '''
 
-		path = path_with_file_name
+        image_path = self.url(name).split("/master/")[-1]
 
-		delete_url = get_url(name, path, self.media_bucket)
-		headers = {"Authorization": f"token {self.token}"}
+        path_with_file_name = image_path.split("/")
+        name = path_with_file_name.pop()
 
-		fetch_url = get_url(name, path, self.media_bucket)
-		response = requests.get(fetch_url)
+        if path_with_file_name[0] == self.media_bucket:
+            del path_with_file_name[0]
 
-		try:
-			json_data = json.loads(response.content)
-			sha = json_data["sha"]
+        path = path_with_file_name
 
-		except:
-			raise IOError(response.content)
+        delete_url = get_url(name, path, self.media_bucket)
+        headers = {"Authorization": f"token {self.token}"}
 
-		delete_url = get_url(name, path, self.media_bucket)
-		headers = {"Authorization": f"token {self.token}"}
+        fetch_url = get_url(name, path, self.media_bucket)
+        response = requests.get(fetch_url)
 
-		payload = {}
-		payload["message"] = name
-		payload["committer"] = {}
-		payload["committer"]["name"] = "Monalisa Octocat"
-		payload["committer"]["email"] = "octocat@github.com"
-		payload["sha"] = sha
+        try:
+            json_data = json.loads(response.content)
+            sha = json_data.get("sha", None)
 
-		response = requests.delete(url=delete_url, data=json.dumps(payload), headers=headers)
+        except:
+            raise IOError(response.content)
 
-		if response.status_code == 404:
-			raise IOError(response.content)
+        delete_url = get_url(name, path, self.media_bucket)
+        headers = {"Authorization": f"token {self.token}"}
 
-		return 1
+        payload = {}
+        payload["message"] = name
+        payload["committer"] = {}
+        payload["committer"]["name"] = "Monalisa Octocat"
+        payload["committer"]["email"] = "octocat@github.com"
+        payload["sha"] = sha
 
-	def size(self, name):
-		'''
-		:Required:
-			name || (name of the file) || type string
+        response = requests.delete(
+            url=delete_url, data=json.dumps(payload), headers=headers)
 
-		:Action: 
-			* Gets the Image url from the get_url method
-			* Gets the response from the github for the particular content
-			* Extracts the size from the response.
+        if response.status_code == 404:
+            raise IOError(response.content)
 
-		:Returns:
-			Size of the Image
+        return 1
 
-		:Raise:
-			If the file does not exists || status_code = 404
-		'''
-		name = str(name)
+    def size(self, name):
+        '''
+        :Required:
+                name || (name of the file) || type string
 
-		image_path = self.url(name).split("/master/")[-1]
-		path_with_file_name = image_path.split("/")
-		name = path_with_file_name.pop()
+        :Action: 
+                * Gets the Image url from the get_url method
+                * Gets the response from the github for the particular content
+                * Extracts the size from the response.
 
-		if path_with_file_name[0] == self.media_bucket:
-			del path_with_file_name[0]
+        :Returns:
+                Size of the Image
 
-		path = path_with_file_name
-		get_size_url = get_url(name, path, self.media_bucket)
+        :Raise:
+                If the file does not exists || status_code = 404
+        '''
+        name = str(name)
 
-		headers = {"Authorization": f"token {self.token}"}
-		response = requests.get(get_size_url, headers)
+        image_path = self.url(name).split("/master/")[-1]
+        path_with_file_name = image_path.split("/")
+        name = path_with_file_name.pop()
 
-		if response.status_code == 404:
-			raise IOError(response.content)
+        if path_with_file_name[0] == self.media_bucket:
+            del path_with_file_name[0]
 
-		json_data = json.loads(response.content)
-		
-		return json_data['size']
+        path = path_with_file_name
+        get_size_url = get_url(name, path, self.media_bucket)
+
+        headers = {"Authorization": f"token {self.token}"}
+        response = requests.get(get_size_url, headers)
+
+        if response.status_code == 404:
+            raise IOError(response.content)
+
+        json_data = json.loads(response.content)
+
+        return json_data['size']
