@@ -54,8 +54,6 @@ class BackendStorages(Storage):
         # Get name and path from full name:
         path = name.split('/')[:-1]
         name = name.split('/')[-1]
-        print("Path: ", path)
-        print("Name: ", name)
 
         return self._save(name, path, content)
 
